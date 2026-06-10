@@ -98,4 +98,4 @@ response = client.chat.completions.create(
 )
 
 print("\n=== FINAL MORNING DYNAMIC WATCHLIST ===")
-print(response.choices.message.content)
+print(response.choices[0].message.content)
