@@ -3,7 +3,7 @@ import yfinance as yf
 from openai import OpenAI
 
 # Initialize our ultra-cheap AI agent
-client = OpenAI(api_key=os.environ.get("Openai_API_Key"))
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Add the specific junior mining tickers you want to monitor daily.
 # Yahoo Finance format: Canadian Ventuer uses '.V', Australian uses '.AX'
