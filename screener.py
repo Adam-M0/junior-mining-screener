@@ -8,15 +8,19 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 print("Connecting to Open Google News Mining Network...")
 
-# LINE 12: Expanded search query to maximize target article discovery
+# Expanded search query to maximize target article discovery
 feed_url = "https://google.com"
 
-# LINE 15: Added authentic desktop browser identity headers to bypass firewalls
+# Authentic desktop browser identity headers to bypass firewalls
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://news.google.com/"
+    "Referer": "https://google.com"
 }
+
+# CRITICAL LINE: Defining the articles list container explicitly
+articles = []
+
 try:
     response = requests.get(feed_url, headers=headers, timeout=15)
     raw_text = response.text
