@@ -1,95 +1,64 @@
 import os
 import requests
-import yfinance as yf
+import xml.etree.ElementTree as ET
 from openai import OpenAI
 
 # Initialize AI Client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-print("Fetching active TSX Venture list...")
+print("Connecting to Junior Mining Network Feed...")
+
+# Fetching the live news distribution feed from Junior Mining Network
+feed_url = "https://juniorminingnetwork.com"
 
 try:
-    # We fetch a live, public, open-source master list of TSXV tickers 
-    # to find candidates dynamically instead of hardcoding them.
-    url = "https://githubusercontent.com"
-    response = requests.get(url, timeout=15)
-    all_tickers = response.json()  # This provides a broad array of raw tickers (e.g., ["AAG", "NXS"])
-except Exception as e:
-    print(f"Failed to fetch master exchange directory: {e}")
-    # Fallback list just in case the external server fails to respond
-    all_tickers = ["NXS", "AAG", "LIO", "AU", "AMX", "PPP", "KLDC", "DRY", "SGD"]
-
-print(f"Discovered {len(all_tickers)} potential listings. Beginning math verification scan...")
-
-filtered_stocks = []
-scan_limit = 50  # We limit the initial bulk profile scan to avoid hitting Yahoo speed blocks
-scanned_count = 0
-
-for raw_symbol in all_tickers:
-    if scanned_count >= scan_limit:
-        break
-        
-    # Standardize format to Yahoo Finance Venture format (Symbol + .V)
-    ticker_symbol = f"{raw_symbol.strip()}.V"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    response = requests.get(feed_url, headers=headers, timeout=15)
     
-    try:
-        ticker = yf.Ticker(ticker_symbol)
-        info = ticker.info
+    # Parse the XML data structure from the website feed
+    root = ET.fromstring(response.content)
+    articles = []
+    
+    # Extract the titles, text blurbs, and reference links for today's releases
+    for item in root.findall(".//item")[:25]:  # Sift through the top 25 newest updates
+        title = item.find("title").text if item.find("title") is not None else ""
+        description = item.find("description").text if item.find("description") is not None else ""
+        link = item.find("link").text if item.find("link") is not None else ""
         
-        if not info:
-            continue
-            
-        market_cap = info.get("marketCap", 0) or 0
-        volume = info.get("volume", 0) or 0
-        industry = info.get("industry", "").lower()
-        
-        # FILTER 1: Target only true Materials/Mining related micro-caps
-        if "mining" not in industry and "materials" not in industry and "gold" not in industry:
-            continue
-            
-        # FILTER 2: Target Micro-Caps (Market Cap under $100 Million)
-        if market_cap > 100000000 or market_cap == 0:
-            continue
-            
-        # FILTER 3: Basic liquidity buffer to ensure it's actively traded
-        if volume < 5000:
-            continue
-            
-        # Safe extraction of latest news headline text
-        ticker_news = getattr(ticker, "news", [])
-        latest_headline = "No recent news."
-        if ticker_news and len(ticker_news) > 0:
-            latest_headline = ticker_news[0].get("title", "No headline text available.")
-            
-        filtered_stocks.append({
-            "ticker": ticker_symbol,
-            "mcap": f"${market_cap:,}",
-            "vol": f"{volume:,}",
-            "industry": info.get("industry", "Mining"),
-            "headline": latest_headline
+        articles.append({
+            "title": title,
+            "summary": description[:400],  # Give AI the first 400 characters for context
+            "link": link
         })
         
-        scanned_count += 1
-        print(f"Added Candidate: {ticker_symbol} | Vol: {volume:,}")
-        
-    except Exception:
-        # Move past any tickers that throw errors or are temporarily halted
-        continue
+    print(f"Successfully downloaded {len(articles)} fresh industry updates.")
 
-if not filtered_stocks:
-    print("No mining stocks met your strict filters during this session's pass.")
+except Exception as e:
+    print(f"Network error trying to read the live feed: {e}")
     exit()
 
-print(f"Successfully generated a baseline of {len(filtered_stocks)} candidates. Routing to AI agent...")
+if not articles:
+    print("No new articles posted on the feed today.")
+    exit()
 
-# The prompt dynamically reviews the raw output list generated above
+print("Routing mining news to AI geological analysis agent...")
+
+# Instruct the AI agent to explicitly act as a professional economic geologist
 ai_prompt = f"""
-You are an expert junior resource analyst. Audit this list of dynamically generated mining stocks:
-{filtered_stocks}
+You are an expert economic geologist and mining analyst. Review these junior mining news items:
+{articles}
 
-Examine the headlines. Identify if any contain major geological catalyst terms or exploration indicators (e.g., 'assays', 'drill', 'intercept', 'g/t', 'copper', 'gold', 'uranium', 'discovery', or 'strike'). 
+Your task is to isolate early-phase miners reporting notable drill results or sampling assays.
+For each valid discovery, cross-reference your geological knowledge base to verify if their asset sits within a prolific mining district, geological belt, or has proven multi-million ounce/ton deposits nearby.
 
-Generate a clean Markdown table summarizing the findings. Rank the highest impact geological news at the top. Add a one-sentence warning if a ticker has no recent news.
+Output a clean Markdown report with the following structure:
+### ⛏️ Top Drilling & Discovery Catalysts
+Create a Markdown table with columns: [Company / Project] | [Commodity] | [Drill/Assay Highlights] | [District Proximity Context] | [Source Link]
+
+Rules:
+1. Only include companies showing high-grade or high-width results (e.g., 'g/t Au', '% Cu', 'AgEq').
+2. In the 'District Proximity Context' column, specify why the location matters (e.g., 'Sits in the Carlin Trend near Nevada Gold Mines operations' or 'Located in the Abitibi Greenstone belt near historical producers').
+3. Format the source link as a clickable markdown markdown hyper-link using the exact URL provided.
 """
 
 response = client.chat.completions.create(
@@ -97,5 +66,5 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": ai_prompt}]
 )
 
-print("\n=== FINAL MORNING DYNAMIC WATCHLIST ===")
+print("\n=== FINAL JUNIOR MINING DISTRICT INTELLIGENCE ===")
 print(response.choices[0].message.content)
