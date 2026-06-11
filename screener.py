@@ -1,44 +1,55 @@
 import os
+import re
 import requests
-import xml.etree.ElementTree as ET
 from openai import OpenAI
 
 # Initialize AI Client
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 print("Connecting to Junior Mining Network Feed...")
-
-# Fetching the live news distribution feed from Junior Mining Network
 feed_url = "https://juniorminingnetwork.com"
 
 try:
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     response = requests.get(feed_url, headers=headers, timeout=15)
     
-    # Parse the XML data structure from the website feed
-    root = ET.fromstring(response.content)
+    # We convert the webpage text into a safe format to prevent encoding crashes
+    raw_text = response.text
+    
+    # We extract individual articles using text patterns instead of strict XML parsing
+    items = re.findall(r'<item>(.*?)</item>', raw_text, re.DOTALL)
     articles = []
     
-    # Extract the titles, text blurbs, and reference links for today's releases
-    for item in root.findall(".//item")[:25]:  # Sift through the top 25 newest updates
-        title = item.find("title").text if item.find("title") is not None else ""
-        description = item.find("description").text if item.find("description") is not None else ""
-        link = item.find("link").text if item.find("link") is not None else ""
+    # Sift through the newest 25 updates on the feed
+    for item in items[:25]:
+        # Safely extract Title, Link, and Description using regular expressions
+        title_match = re.search(r'<title>(.*?)</title>', item, re.DOTALL)
+        link_match = re.search(r'<link>(.*?)</link>', item, re.DOTALL)
+        desc_match = re.search(r'<description>(.*?)</description>', item, re.DOTALL)
+        
+        title = title_match.group(1).strip() if title_match else "Unknown Title"
+        link = link_match.group(1).strip() if link_match else ""
+        desc = desc_match.group(1).strip() if desc_match else ""
+        
+        # Clean up common internet code tags from the text
+        title = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', title)
+        desc = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', desc)
+        desc = re.sub(r'<[^>]*>', '', desc)  # Strips out raw HTML formatting tags
         
         articles.append({
             "title": title,
-            "summary": description[:400],  # Give AI the first 400 characters for context
+            "summary": desc[:400],  # Give AI the first 400 characters for background context
             "link": link
         })
         
-    print(f"Successfully downloaded {len(articles)} fresh industry updates.")
+    print(f"Successfully processed {len(articles)} fresh industry updates.")
 
 except Exception as e:
     print(f"Network error trying to read the live feed: {e}")
     exit()
 
 if not articles:
-    print("No new articles posted on the feed today.")
+    print("No new articles could be extracted from the feed today.")
     exit()
 
 print("Routing mining news to AI geological analysis agent...")
@@ -58,7 +69,7 @@ Create a Markdown table with columns: [Company / Project] | [Commodity] | [Drill
 Rules:
 1. Only include companies showing high-grade or high-width results (e.g., 'g/t Au', '% Cu', 'AgEq').
 2. In the 'District Proximity Context' column, specify why the location matters (e.g., 'Sits in the Carlin Trend near Nevada Gold Mines operations' or 'Located in the Abitibi Greenstone belt near historical producers').
-3. Format the source link as a clickable markdown markdown hyper-link using the exact URL provided.
+3. Format the source link as a clickable markdown hyperlink using the exact URL provided.
 """
 
 response = client.chat.completions.create(
